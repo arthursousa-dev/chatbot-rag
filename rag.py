@@ -2,6 +2,7 @@
 relevantes para a pergunta e gera a resposta com a API da Claude."""
 
 import os
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -59,8 +60,6 @@ class Indice:
 
     @staticmethod
     def _limpar(texto: str) -> str:
-        import unicodedata
-
         sem_acento = unicodedata.normalize("NFKD", texto.lower()).encode("ascii", "ignore").decode()
         palavras = "".join(c if c.isalnum() else " " for c in sem_acento).split()
         return " ".join(p for p in palavras if p not in STOPWORDS)
@@ -97,13 +96,20 @@ def responder(indice: Indice, pergunta: str) -> dict:
     import anthropic
 
     cliente = anthropic.Anthropic()
-    msg = cliente.messages.create(
-        model=MODEL,
-        max_tokens=500,
-        system=PROMPT_SISTEMA,
-        messages=[{"role": "user", "content": f"{montar_contexto(resultados)}\n\nPergunta: {pergunta}"}],
-    )
-    return {"resposta": msg.content[0].text, "fontes": fontes}
+    try:
+        msg = cliente.messages.create(
+            model=MODEL,
+            max_tokens=500,
+            system=PROMPT_SISTEMA,
+            messages=[{"role": "user", "content": f"{montar_contexto(resultados)}\n\nPergunta: {pergunta}"}],
+        )
+    except anthropic.APIError as erro:
+        # Falha de rede, chave inválida ou limite de uso não pode derrubar o chat do paciente.
+        print(f"Erro na API da Claude: {erro!r}")
+        return {"resposta": "Não consegui responder agora. Tente de novo em instantes ou fale com a recepção.", "fontes": []}
+    # Junta só os blocos de texto: o primeiro bloco nem sempre é texto.
+    texto = "".join(b.text for b in msg.content if b.type == "text")
+    return {"resposta": texto, "fontes": fontes}
 
 
 if __name__ == "__main__":

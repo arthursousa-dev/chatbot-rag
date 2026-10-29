@@ -17,3 +17,18 @@ def test_recupera_o_documento_certo_entre_os_trechos_enviados_ao_llm():
 
 def test_pergunta_fora_do_escopo_nao_recupera_nada():
     assert responder(IDX, "qual a capital da França")["fontes"] == []
+
+
+def test_falha_da_api_vira_mensagem_amigavel(monkeypatch):
+    import anthropic
+
+    class ClienteFalho:
+        class messages:
+            @staticmethod
+            def create(**kwargs):
+                raise anthropic.APIError.__new__(anthropic.APIConnectionError)
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "teste")
+    monkeypatch.setattr(anthropic, "Anthropic", ClienteFalho)
+    r = responder(IDX, "quanto custa o clareamento")
+    assert r["fontes"] == [] and "recepção" in r["resposta"]
