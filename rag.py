@@ -25,14 +25,25 @@ class Trecho:
     texto: str
 
 
+def _blocos_do_arquivo(arq: Path) -> list[str]:
+    """Texto do arquivo em blocos: parágrafos para .md/.txt, linhas para PDF
+    (a extração de PDF raramente preserva a linha em branco entre parágrafos)."""
+    if arq.suffix.lower() == ".pdf":
+        from pypdf import PdfReader
+
+        texto = "\n".join(pagina.extract_text() or "" for pagina in PdfReader(arq).pages)
+        return [linha.strip() for linha in texto.splitlines() if linha.strip()]
+    return [p.strip() for p in arq.read_text(encoding="utf-8").split("\n\n") if p.strip()]
+
+
 def carregar_trechos(pasta: Path = DOCS_DIR, max_palavras: int = 40) -> list[Trecho]:
-    """Lê os .md/.txt da pasta e divide cada um em trechos por parágrafo,
-    agrupando parágrafos curtos até ~max_palavras."""
+    """Lê os .md/.txt/.pdf da pasta e divide cada um em trechos,
+    agrupando blocos curtos até ~max_palavras."""
     trechos = []
     for arq in sorted(pasta.glob("*.*")):
-        if arq.suffix not in {".md", ".txt"}:
+        if arq.suffix.lower() not in {".md", ".txt", ".pdf"}:
             continue
-        paragrafos = [p.strip() for p in arq.read_text(encoding="utf-8").split("\n\n") if p.strip()]
+        paragrafos = _blocos_do_arquivo(arq)
         atual = []
         for p in paragrafos:
             atual.append(p)
